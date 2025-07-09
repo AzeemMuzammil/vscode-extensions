@@ -521,19 +521,21 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
     const handleOnSave = async () => {
         console.log(">>> save value", { selectedTool, selectedMcpTools: Array.from(selectedMcpTools) });
         
-        let defaultName = "MCP Server";
-        if (mcpToolkitCount > 1) {
-            defaultName += ` 0${mcpToolkitCount}`;
+        // Use the same logic as the display to determine the name
+        let finalName;
+        if (name.trim() !== "") {
+            finalName = name.trim();
+        } else {
+            finalName = mcpToolkitCount > 1 ? `MCP Server 0${mcpToolkitCount}` : "MCP Server";
         }
+        
         const payload = {
-            name: name.trim() || defaultName,
+            name: finalName,
             serviceUrl: serviceUrl.trim(),
             configs: configs,
             toolSelection,
             selectedTools: toolSelection === "Selected" ? Array.from(selectedMcpTools) : []
         };
-        setMcpToolkitCount(mcpToolkitCount + 1);
-        console.log(">>> toolkit count", mcpToolkitCount);
         console.log(">>> Saving with payload:", payload);
 
         setSavingForm(true);
@@ -545,6 +547,10 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
                 .getBIDiagramRpcClient()
                 .getSourceCode({ filePath: agentFilePath.current, flowNode: updatedAgentNode });
             console.log(">>> response getSourceCode with template ", { agentResponse });
+
+            // Only increment count after successful save
+            setMcpToolkitCount(mcpToolkitCount + 1);
+            console.log(">>> toolkit count incremented to", mcpToolkitCount + 1);
 
             onSave?.();
         } catch (error) {
@@ -698,6 +704,7 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
                         />
                     </NameContainer>
 
+                    {/* TODO: Enable configs field later - needs proper wiring for Record<string, string> type
                     <NameContainer>
                         <TextField
                             sx={{ flexGrow: 1, marginTop: 15 }}
@@ -709,6 +716,7 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
                             value={""}
                         />
                     </NameContainer>
+                    */}
 
                     <NameContainer>
                         <TextField
