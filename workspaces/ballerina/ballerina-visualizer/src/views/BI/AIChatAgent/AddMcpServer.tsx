@@ -287,6 +287,7 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
                     object: "Client"
                 }
             });
+        // console.log(">>> mcpToolResponse", mcpToolResponse);
         setMcpToolResponse(mcpToolResponse.flowNode)
         console.log(">>> response getSourceCode with template ", { mcpToolResponse });
         if (agentNode?.properties?.tools?.value) {
@@ -540,17 +541,23 @@ export function AddMcpServer(props: AddToolProps): JSX.Element {
 
         setSavingForm(true);
         try {
+            await rpcClient.getAIAgentRpcClient().updateMCPToolKit({
+                agentFlowNode: agentNode,
+                serviceUrl: `"${payload.serviceUrl}"`,
+                serverName: finalName,
+                selectedTools: payload.selectedTools
+            });
             // update the agent node
-            const updatedAgentNode = await addMcpServerToAgentNode(agentNode, payload);
-            // generate the source code
-            const agentResponse = await rpcClient
-                .getBIDiagramRpcClient()
-                .getSourceCode({ filePath: agentFilePath.current, flowNode: updatedAgentNode });
-            console.log(">>> response getSourceCode with template ", { agentResponse });
+            // const updatedAgentNode = await addMcpServerToAgentNode(agentNode, payload);
+            // // generate the source code
+            // const agentResponse = await rpcClient
+            //     .getBIDiagramRpcClient()
+            //     .getSourceCode({ filePath: agentFilePath.current, flowNode: updatedAgentNode });
+            // console.log(">>> response getSourceCode with template ", { agentResponse });
 
-            // Only increment count after successful save
-            setMcpToolkitCount(mcpToolkitCount + 1);
-            console.log(">>> toolkit count incremented to", mcpToolkitCount + 1);
+            // // Only increment count after successful save
+            // setMcpToolkitCount(mcpToolkitCount + 1);
+            // console.log(">>> toolkit count incremented to", mcpToolkitCount + 1);
 
             onSave?.();
         } catch (error) {
