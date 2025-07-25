@@ -23,6 +23,7 @@ import {
     AIPanelAPI,
     AIPanelPrompt,
     AddToProjectRequest,
+    AuthCredentials,
     BIModuleNodesRequest,
     BISourceCodeResponse,
     Command,
@@ -43,6 +44,7 @@ import {
     GetFromFileRequest,
     GetModuleDirParams,
     LLMDiagnostics,
+    LoginMethod,
     NotifyAIMappingsRequest,
     OperationType,
     PostProcessRequest,
@@ -88,10 +90,10 @@ import { Library } from "../../features/ai/service/libs/libs_types";
 import { generateFunctionTests } from "../../features/ai/service/test/function_tests";
 import { generateTestPlan } from "../../features/ai/service/test/test_plan";
 import { generateTest, getDiagnostics, getResourceAccessorDef, getResourceAccessorNames, getServiceDeclaration, getServiceDeclarationNames } from "../../features/ai/testGenerator";
-import { closeAllBallerinaFiles, OLD_BACKEND_URL } from "../../features/ai/utils";
+import { OLD_BACKEND_URL, closeAllBallerinaFiles } from "../../features/ai/utils";
 import { getLLMDiagnosticArrayAsString, handleChatSummaryFailure } from "../../features/natural-programming/utils";
 import { StateMachine, updateView } from "../../stateMachine";
-import { getAccessToken, getRefreshedAccessToken, loginGithubCopilot } from "../../utils/ai/auth";
+import { getAuthCredentials, getRefreshedAccessToken, loginGithubCopilot } from "../../utils/ai/auth";
 import { modifyFileContent, writeBallerinaFileDidOpen } from "../../utils/modification";
 import { updateSourceCode } from "../../utils/source-utils";
 import { PARSING_ERROR, UNKNOWN_ERROR } from "../../views/ai-panel/errorCodes";
@@ -139,15 +141,26 @@ export class AiPanelRpcManager implements AIPanelAPI {
         });
     }
 
+    async getAuthCredentials(): Promise<AuthCredentials> {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const authCredentials = await getAuthCredentials();
+                resolve(authCredentials);
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
     async getAccessToken(): Promise<string> {
         return new Promise(async (resolve, reject) => {
             try {
-                const accessToken = await getAccessToken();
-                if (!accessToken) {
-                    reject(new Error("Access Token is undefined"));
+                const authCredentials = await getAuthCredentials();
+                if (!authCredentials || authCredentials.loginMethod !== LoginMethod.BI_INTEL) {
+                    reject(new Error("Auth Credentials are undefined"));
                     return;
                 }
-                resolve(accessToken);
+                resolve(authCredentials.secrets.accessToken);
             } catch (error) {
                 reject(error);
             }

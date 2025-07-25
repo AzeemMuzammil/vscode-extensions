@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { AuthCredentials } from "../../state-machine-types";
 import { AddToProjectRequest, GetFromFileRequest, DeleteFromProjectRequest, GenerateMappingsRequest, GenerateMappingsResponse, NotifyAIMappingsRequest, ProjectSource, ProjectDiagnostics, GenerateMappingsFromRecordRequest, GenerateMappingFromRecordResponse, PostProcessRequest, PostProcessResponse, GenerateTypesFromRecordRequest, GenerateTypesFromRecordResponse, FetchDataRequest, FetchDataResponse, TestGenerationRequest, TestGenerationResponse, TestGenerationMentions, AIChatSummary, DeveloperDocument, RequirementSpecification, LLMDiagnostics, GetModuleDirParams, AIPanelPrompt, AIMachineSnapshot, SubmitFeedbackRequest, RelevantLibrariesAndFunctionsRequest, GenerateOpenAPIRequest, GenerateCodeRequest, TestPlanGenerationRequest, TestGeneratorIntermediaryState, RepairParams, RelevantLibrariesAndFunctionsResponse } from "./interfaces";
 
 export interface AIPanelAPI {
@@ -24,6 +25,7 @@ export interface AIPanelAPI {
     // ==================================
     getBackendUrl: () => Promise<string>;
     getProjectUuid: () => Promise<string>;
+    getAuthCredentials: () => Promise<AuthCredentials>;
     getAccessToken: () => Promise<string>;
     getRefreshedAccessToken: () => Promise<string>;
     getDefaultPrompt: () => Promise<AIPanelPrompt>;

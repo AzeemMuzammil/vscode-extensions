@@ -17,29 +17,37 @@
  */
 
 import * as vscode from 'vscode';
-import { AIUserToken, LoginMethod, AuthCredentials } from '@wso2/ballerina-core';
+import { LoginMethod, AuthCredentials } from '@wso2/ballerina-core';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 import { getAuthUrl, getLogoutUrl } from './auth';
 import { extension } from '../../BalExtensionContext';
-import { getAccessToken, clearAuthCredentials, storeAuthCredentials, getLoginMethod } from '../../utils/ai/auth';
+import { getAuthCredentials, getDevantCredentials } from '../../utils/ai/auth';
+import { clearAuthCredentialsFromSecrets, setCurrentActiveFlowInSecrets, storeAuthCredentialsInSecrets } from '../../../src/utils/ai/auth-secrets';
 
 const LEGACY_ACCESS_TOKEN_SECRET_KEY = 'BallerinaAIUser';
 const LEGACY_REFRESH_TOKEN_SECRET_KEY = 'BallerinaAIRefreshToken';
 
-export const checkToken = async (): Promise<{ token: string; loginMethod: LoginMethod } | undefined> => {
+export const checkToken = async (): Promise<AuthCredentials | undefined> => {
     return new Promise(async (resolve, reject) => {
         try {
             // Clean up any legacy tokens on initialization
             await cleanupLegacyTokens();
 
-            const token = await getAccessToken();
-            const loginMethod = await getLoginMethod();
-            if (!token || !loginMethod) {
-                resolve(undefined);
-                return;
+            // Try to get access token first
+            let result = await getAuthCredentials();
+
+            // If getAccessToken is undefined, check if devant keys are present
+            if (!result) {
+                const devantCredentials = await getDevantCredentials();
+                if (devantCredentials) {
+                    // Set current active flow to devant and try getAuthCredentials again
+                    await setCurrentActiveFlowInSecrets(LoginMethod.DEVANT_ENV);
+                    result = await getAuthCredentials();
+                }
             }
-            resolve({ token, loginMethod });
+
+            resolve(result);
         } catch (error) {
             reject(error);
         }
@@ -63,15 +71,15 @@ const cleanupLegacyTokens = async (): Promise<void> => {
 export const logout = async (isUserLogout: boolean = true) => {
     // For user-initiated logout, check if we need to redirect to SSO logout
     if (isUserLogout) {
-        const { token, loginMethod } = await checkToken();
-        if (token && loginMethod === LoginMethod.BI_INTEL) {
+        const credentials = await checkToken();
+        if (credentials && credentials.loginMethod === LoginMethod.BI_INTEL) {
             const logoutURL = getLogoutUrl();
             vscode.env.openExternal(vscode.Uri.parse(logoutURL));
         }
     }
 
     // Always clear stored credentials
-    await clearAuthCredentials();
+    await clearAuthCredentialsFromSecrets();
 };
 
 export async function initiateInbuiltAuth() {
@@ -82,7 +90,7 @@ export async function initiateInbuiltAuth() {
     return vscode.env.openExternal(vscode.Uri.parse(oauthURL));
 }
 
-export const validateApiKey = async (apiKey: string, loginMethod: LoginMethod): Promise<AIUserToken> => {
+export const validateApiKey = async (apiKey: string, loginMethod: LoginMethod): Promise<AuthCredentials> => {
     if (loginMethod !== LoginMethod.ANTHROPIC_KEY) {
         throw new Error('This login method is not supported. Please use SSO login instead.');
     }
@@ -110,9 +118,9 @@ export const validateApiKey = async (apiKey: string, loginMethod: LoginMethod): 
                 apiKey: apiKey
             }
         };
-        await storeAuthCredentials(credentials);
+        await storeAuthCredentialsInSecrets(credentials);
 
-        return { token: apiKey };
+        return credentials;
 
     } catch (error) {
         console.error('API key validation failed:', error);

@@ -242,6 +242,7 @@ export enum AIMachineEventType {
     CANCEL_LOGIN = 'CANCEL_LOGIN',
     RETRY = 'RETRY',
     DISPOSE = 'DISPOSE',
+    SWITCH_FLOW = 'SWITCH_FLOW',
 }
 
 export type AIMachineEventMap = {
@@ -255,6 +256,7 @@ export type AIMachineEventMap = {
     [AIMachineEventType.CANCEL_LOGIN]: undefined;
     [AIMachineEventType.RETRY]: undefined;
     [AIMachineEventType.DISPOSE]: undefined;
+    [AIMachineEventType.SWITCH_FLOW]: { targetFlow: LoginMethod };
 };
 
 export type AIMachineSendableEvent =
@@ -265,7 +267,8 @@ export type AIMachineSendableEvent =
 
 export enum LoginMethod {
     BI_INTEL = 'biIntel',
-    ANTHROPIC_KEY = 'anthropic_key'
+    ANTHROPIC_KEY = 'anthropic_key',
+    DEVANT_ENV = 'devant_env'
 }
 
 interface BIIntelSecrets {
@@ -277,6 +280,11 @@ interface AnthropicKeySecrets {
     apiKey: string;
 }
 
+interface DevantEnvSecrets {
+    apiKey: string;
+    stsToken: string;
+}
+
 export type AuthCredentials =
     | {
         loginMethod: LoginMethod.BI_INTEL;
@@ -285,16 +293,37 @@ export type AuthCredentials =
     | {
         loginMethod: LoginMethod.ANTHROPIC_KEY;
         secrets: AnthropicKeySecrets;
+    }
+    | {
+        loginMethod: LoginMethod.DEVANT_ENV;
+        secrets: DevantEnvSecrets;
     };
 
 export interface AIUserToken {
-    token: string; // For BI Intel, this is the access token and for Anthropic, this is the API key
+    credentials: AuthCredentials;
+    usageToken?: string;
+    metadata?: {
+        [key: string]: any;
+    };
+}
+
+// Multi-session storage interface
+export interface AuthSessionStore {
+    currentActiveFlow?: LoginMethod;
+    sessions: {
+        [K in LoginMethod]?: AuthCredentials;
+    };
+    metadata?: {
+        lastUpdated?: string;
+        [key: string]: any;
+    };
 }
 
 export interface AIMachineContext {
     loginMethod?: LoginMethod;
     userToken?: AIUserToken;
     errorMessage?: string;
+    availableFlows?: LoginMethod[]; // Track which flows are logged-in (e.g., devant env detected, anthropic key detected)
 }
 
 export enum ColorThemeKind {

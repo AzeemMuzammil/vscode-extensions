@@ -18,10 +18,10 @@
 
 /* eslint-disable @typescript-eslint/naming-convention */
 import { createMachine, assign, interpret } from 'xstate';
-import { AIMachineStateValue, AIPanelPrompt, AIMachineEventType, AIMachineContext, AIUserToken, AIMachineSendableEvent, LoginMethod } from '@wso2/ballerina-core';
+import { AIMachineStateValue, AIPanelPrompt, AIMachineEventType, AIMachineContext, AIMachineSendableEvent, LoginMethod } from '@wso2/ballerina-core';
 import { AiPanelWebview } from './webview';
 import { extension } from '../../BalExtensionContext';
-import { getAccessToken } from '../../utils/ai/auth';
+import { getAuthCredentials } from '../../utils/ai/auth';
 import { checkToken, initiateInbuiltAuth, logout, validateApiKey } from './utils';
 
 export const USER_CHECK_BACKEND_URL = '/user/usage';
@@ -72,7 +72,7 @@ const aiMachine = createMachine<AIMachineContext, AIMachineSendableEvent>({
                         target: 'Authenticated',
                         actions: assign({
                             loginMethod: (_ctx, event) => event.data.loginMethod,
-                            userToken: (_ctx, event) => ({ token: event.data.token }),
+                            userToken: (_ctx, event) => ({ credentials: event.data }),
                             errorMessage: (_ctx) => undefined,
                         })
                     },
@@ -214,7 +214,7 @@ const aiMachine = createMachine<AIMachineContext, AIMachineSendableEvent>({
                 src: 'getTokenAfterAuth',
                 onDone: {
                     actions: assign({
-                        userToken: (_ctx, event) => ({ token: event.data.token }),
+                        userToken: (_ctx, event) => ({ credentials: event.data }),
                         loginMethod: (_ctx, event) => event.data.loginMethod,
                         errorMessage: (_ctx) => undefined,
                     })
@@ -291,11 +291,11 @@ const validateApiKeyService = async (_context: AIMachineContext, event: any) => 
 };
 
 const getTokenAfterAuth = async () => {
-    const result = await getAccessToken();
+    const result = await getAuthCredentials();
     if (!result) {
         throw new Error('No authentication credentials found');
     }
-    return { token: result, loginMethod: LoginMethod.BI_INTEL };
+    return result;
 };
 
 const aiStateService = interpret(aiMachine.withConfig({

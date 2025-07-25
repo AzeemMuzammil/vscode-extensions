@@ -21,7 +21,7 @@ import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { Button, Codicon, Typography } from "@wso2/ui-toolkit";
 
 import { AIChatView } from "../styles";
-import { AIMachineEventType } from "@wso2/ballerina-core";
+import { AIMachineEventType, LoginMethod } from "@wso2/ballerina-core";
 
 const Container = styled.div`
     display: flex;
@@ -62,6 +62,7 @@ export const SettingsPanel = (props: { onClose: () => void }) => {
     const { rpcClient } = useRpcContext();
 
     const [copilotAuthorized, setCopilotAuthorized] = React.useState(false);
+    const [currentLoginMethod, setCurrentLoginMethod] = React.useState<LoginMethod | undefined>();
 
     const messagesEndRef = createRef<HTMLDivElement>();
 
@@ -69,6 +70,17 @@ export const SettingsPanel = (props: { onClose: () => void }) => {
         isCopilotAuthorized().then((authorized) => {
             setCopilotAuthorized(authorized);
         });
+
+        // Get current authentication method
+        rpcClient
+            .getAiPanelRpcClient()
+            .getAuthCredentials()
+            .then((credentials) => {
+                setCurrentLoginMethod(credentials?.loginMethod);
+            })
+            .catch(() => {
+                setCurrentLoginMethod(undefined);
+            });
     }, []);
 
     const handleCopilotLogout = () => {
@@ -102,13 +114,16 @@ export const SettingsPanel = (props: { onClose: () => void }) => {
                 <Typography variant="subtitle1">Connect to AI Platforms for Enhanced Features</Typography>
                 <RowGroup>
                     <Row>
-                        <Typography variant="subtitle2">Login to BI Copilot</Typography>
+                        <Typography variant="subtitle2">BI Copilot Authentication</Typography>
                         <Typography variant="caption">
-                            Login to access AI-powered code generation, completions, test generation, data mappings, and
-                            more.
+                            {currentLoginMethod === LoginMethod.DEVANT_ENV
+                                ? "Currently authenticated via Devant."
+                                : "Access AI-powered code generation, completions, test generation, data mappings, and more."}
                         </Typography>
                     </Row>
-                    <Button onClick={() => handleCopilotLogout()}>Logout</Button>
+                    {currentLoginMethod !== LoginMethod.DEVANT_ENV && (
+                        <Button onClick={() => handleCopilotLogout()}>Logout</Button>
+                    )}
                 </RowGroup>
                 <RowGroup>
                     <Row>

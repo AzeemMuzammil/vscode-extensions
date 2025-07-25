@@ -18,13 +18,13 @@
 
 import * as vscode from 'vscode';
 import { extension } from "../../BalExtensionContext";
-import { AUTH_CLIENT_ID, AUTH_ORG } from '../../features/ai/utils';
+import { AUTH_CLIENT_ID, AUTH_ORG, DEVANT_API_KEY, DEVANT_STS_TOKEN } from '../../features/ai/utils';
 import axios from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { AuthCredentials, LoginMethod } from '@wso2/ballerina-core';
+import { getAuthCredentialsFromSecrets, storeAuthCredentialsInSecrets } from './auth-secrets';
 
 export const REFRESH_TOKEN_NOT_AVAILABLE_ERROR_MESSAGE = "Refresh token is not available.";
-export const AUTH_CREDENTIALS_SECRET_KEY = 'BallerinaAuthCredentials';
 
 //TODO: What if user doesnt have github copilot.
 //TODO: Where does auth git get triggered
@@ -118,86 +118,70 @@ async function copilotTokenExists() {
 }
 
 // ==================================
-// Structured Auth Credentials Utils
-// ==================================
-export const storeAuthCredentials = async (credentials: AuthCredentials): Promise<void> => {
-    const credentialsJson = JSON.stringify(credentials);
-    await extension.context.secrets.store(AUTH_CREDENTIALS_SECRET_KEY, credentialsJson);
-};
-
-export const getAuthCredentials = async (): Promise<AuthCredentials | undefined> => {
-    const credentialsJson = await extension.context.secrets.get(AUTH_CREDENTIALS_SECRET_KEY);
-    if (!credentialsJson) {
-        return undefined;
-    }
-
-    try {
-        return JSON.parse(credentialsJson) as AuthCredentials;
-    } catch (error) {
-        console.error('Error parsing auth credentials:', error);
-        return undefined;
-    }
-};
-
-export const clearAuthCredentials = async (): Promise<void> => {
-    await extension.context.secrets.delete(AUTH_CREDENTIALS_SECRET_KEY);
-};
-
-// ==================================
 // BI Copilot Auth Utils
 // ==================================
 export const getLoginMethod = async (): Promise<LoginMethod | undefined> => {
-    const credentials = await getAuthCredentials();
+    const credentials = await getAuthCredentialsFromSecrets();
     if (credentials) {
         return credentials.loginMethod;
     }
     return undefined;
 };
 
-export const getAccessToken = async (): Promise<string | undefined> => {
+export const getAuthCredentials = async (): Promise<AuthCredentials | undefined> => {
     return new Promise(async (resolve, reject) => {
         try {
-            const credentials = await getAuthCredentials();
-
-            if (credentials) {
-                switch (credentials.loginMethod) {
-                    case LoginMethod.BI_INTEL:
-                        try {
-                            const { accessToken } = credentials.secrets;
-                            let finalToken = accessToken;
-
-                            // Decode token and check expiration
-                            const decoded = jwtDecode<JwtPayload>(accessToken);
-                            const now = Math.floor(Date.now() / 1000);
-                            if (decoded.exp && decoded.exp < now) {
-                                finalToken = await getRefreshedAccessToken();
-                            }
-                            resolve(finalToken);
-                            return;
-                        } catch (err) {
-                            if (axios.isAxiosError(err)) {
-                                const status = err.response?.status;
-                                if (status === 400) {
-                                    reject(new Error("TOKEN_EXPIRED"));
-                                    return;
-                                }
-                            }
-                            reject(err);
-                            return;
-                        }
-
-                    case LoginMethod.ANTHROPIC_KEY:
-                        resolve(credentials.secrets.apiKey);
-                        return;
-
-                    default:
-                        const { loginMethod }: AuthCredentials = credentials;
-                        reject(new Error(`Unsupported login method: ${loginMethod}`));
-                        return;
-
-                }
+            const credentials = await getAuthCredentialsFromSecrets();
+            if (!credentials) {
+                resolve(undefined);
+                return;
             }
-            resolve(undefined);
+
+            switch (credentials.loginMethod) {
+                case LoginMethod.BI_INTEL:
+                    try {
+                        const { accessToken } = credentials.secrets;
+                        let finalToken = accessToken;
+
+                        // Decode token and check expiration
+                        const decoded = jwtDecode<JwtPayload>(accessToken);
+                        const now = Math.floor(Date.now() / 1000);
+                        if (decoded.exp && decoded.exp < now) {
+                            finalToken = await getRefreshedAccessToken();
+                        }
+                        resolve({
+                            loginMethod: LoginMethod.BI_INTEL,
+                            secrets: {
+                                accessToken: finalToken,
+                                refreshToken: credentials.secrets.refreshToken
+                            }
+                        });
+                        return;
+                    } catch (err) {
+                        if (axios.isAxiosError(err)) {
+                            const status = err.response?.status;
+                            if (status === 400) {
+                                reject(new Error("TOKEN_EXPIRED"));
+                                return;
+                            }
+                        }
+                        reject(err);
+                        return;
+                    }
+
+                case LoginMethod.ANTHROPIC_KEY:
+                    resolve(credentials);
+                    return;
+
+                case LoginMethod.DEVANT_ENV:
+                    resolve(credentials);
+                    return;
+
+                default:
+                    const { loginMethod }: AuthCredentials = credentials;
+                    reject(new Error(`Unsupported login method: ${loginMethod}`));
+                    return;
+            }
         } catch (error: any) {
             reject(error);
         }
@@ -212,7 +196,7 @@ export const getRefreshedAccessToken = async (): Promise<string> => {
         };
 
         try {
-            const credentials = await getAuthCredentials();
+            const credentials = await getAuthCredentialsFromSecrets();
             if (!credentials || credentials.loginMethod !== LoginMethod.BI_INTEL) {
                 throw new Error('Token refresh is only supported for BI Intel authentication');
             }
@@ -243,11 +227,26 @@ export const getRefreshedAccessToken = async (): Promise<string> => {
                     refreshToken: newRefreshToken
                 }
             };
-            await storeAuthCredentials(updatedCredentials);
+            await storeAuthCredentialsInSecrets(updatedCredentials);
 
             resolve(newAccessToken);
         } catch (error: any) {
             reject(error);
         }
     });
+};
+
+export const getDevantCredentials = async (): Promise<AuthCredentials | undefined> => {
+    if (!DEVANT_API_KEY || !DEVANT_STS_TOKEN ||
+        DEVANT_API_KEY.trim() === '' || DEVANT_STS_TOKEN.trim() === '') {
+        return undefined;
+    }
+
+    return {
+        loginMethod: LoginMethod.DEVANT_ENV,
+        secrets: {
+            apiKey: DEVANT_API_KEY,
+            stsToken: DEVANT_STS_TOKEN
+        }
+    };
 };

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { AIMachineEventType } from "@wso2/ballerina-core";
+import { AIMachineEventType, LoginMethod } from "@wso2/ballerina-core";
 
 interface FetchWithAuthParams {
     url: string;
@@ -38,20 +38,10 @@ export const fetchWithAuth = async ({
 
     controller = new AbortController();
 
-    const makeRequest = async (authToken: string): Promise<Response> =>
-        fetch(url, {
-            method,
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${authToken}`,
-            },
-            body: body ? JSON.stringify(body) : undefined,
-            signal: controller!.signal,
-        });
-
-    let finalToken;
+    // Get authentication credentials to determine method
+    let authCredentials;
     try {
-        finalToken = await rpcClient.getAiPanelRpcClient().getAccessToken();
+        authCredentials = await rpcClient.getAiPanelRpcClient().getAuthCredentials();
     } catch (error) {
         if (isErrorWithMessage(error) && error?.message === "TOKEN_EXPIRED") {
             rpcClient.sendAIStateEvent(AIMachineEventType.SILENT_LOGOUT);
@@ -60,12 +50,48 @@ export const fetchWithAuth = async ({
         throw error;
     }
 
-    let response = await makeRequest(finalToken);
+    if (!authCredentials) {
+        throw new Error("No authentication credentials available");
+    }
 
-    if (response.status === 401) {
-        finalToken = await rpcClient.getAiPanelRpcClient().getRefreshedAccessToken();
-        if (finalToken) {
-            response = await makeRequest(finalToken);
+    const makeRequest = async (credentials: any): Promise<Response> => {
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        };
+
+        // Set authentication headers based on login method
+        if (credentials.loginMethod === LoginMethod.BI_INTEL) {
+            headers["Authorization"] = `Bearer ${credentials.secrets.accessToken}`;
+        } else if (credentials.loginMethod === LoginMethod.DEVANT_ENV) {
+            headers["api-key"] = credentials.secrets.apiKey;
+            headers["x-Authorization"] = credentials.secrets.stsToken;
+        } else {
+            throw new Error(`Unsupported login method: ${credentials.loginMethod}`);
+        }
+
+        return fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+            signal: controller!.signal,
+        });
+    };
+
+    let response = await makeRequest(authCredentials);
+
+    // Handle token expiration (only for BI_INTEL flow)
+    if (response.status === 401 && authCredentials.loginMethod === LoginMethod.BI_INTEL) {
+        const newToken = await rpcClient.getAiPanelRpcClient().getRefreshedAccessToken();
+        if (newToken) {
+            // Update credentials with new token
+            const updatedCredentials = {
+                ...authCredentials,
+                secrets: {
+                    ...authCredentials.secrets,
+                    accessToken: newToken
+                }
+            };
+            response = await makeRequest(updatedCredentials);
         }
     }
 

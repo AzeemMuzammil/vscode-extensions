@@ -47,6 +47,7 @@ import {
     getAccessToken,
     getActiveFile,
     getAIMachineSnapshot,
+    getAuthCredentials,
     getBackendUrl,
     getContentFromFile,
     getDefaultPrompt,
@@ -104,6 +105,7 @@ export function registerAiPanelRpcHandlers(messenger: Messenger) {
     const rpcManger = new AiPanelRpcManager();
     messenger.onRequest(getBackendUrl, () => rpcManger.getBackendUrl());
     messenger.onRequest(getProjectUuid, () => rpcManger.getProjectUuid());
+    messenger.onRequest(getAuthCredentials, () => rpcManger.getAuthCredentials());
     messenger.onRequest(getAccessToken, () => rpcManger.getAccessToken());
     messenger.onRequest(getRefreshedAccessToken, () => rpcManger.getRefreshedAccessToken());
     messenger.onRequest(getDefaultPrompt, () => rpcManger.getDefaultPrompt());

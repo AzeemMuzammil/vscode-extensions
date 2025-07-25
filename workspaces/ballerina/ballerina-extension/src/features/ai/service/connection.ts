@@ -15,7 +15,7 @@
 // under the License.
 
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { getAccessToken, getLoginMethod, getRefreshedAccessToken } from "../../../utils/ai/auth";
+import { getAuthCredentials, getLoginMethod, getRefreshedAccessToken } from "../../../utils/ai/auth";
 import { AIStateMachine } from "../../../views/ai-panel/aiMachine";
 import { BACKEND_URL } from "../utils";
 import { AIMachineEventType, LoginMethod } from "@wso2/ballerina-core";
@@ -40,28 +40,37 @@ let cachedAuthMethod: LoginMethod | null = null;
  */
 export async function fetchWithAuth(input: string | URL | Request, options: RequestInit = {}): Promise<Response | undefined> {
     try {
-        const accessToken = await getAccessToken();
+        const authCredentials = await getAuthCredentials();
+        if (!authCredentials) {
+            throw new Error("No authentication credentials available");
+        }
 
-        // Ensure headers object exists
-        options.headers = {
+        const headers = {
             ...options.headers,
-            'Authorization': `Bearer ${accessToken}`,
             'User-Agent': 'Ballerina-VSCode-Plugin',
             'Connection': 'keep-alive',
         };
 
+        if (authCredentials.loginMethod === LoginMethod.BI_INTEL) {
+            headers['Authorization'] = `Bearer ${authCredentials.secrets.accessToken}`;
+        } else if (authCredentials.loginMethod === LoginMethod.DEVANT_ENV) {
+            headers['api-key'] = authCredentials.secrets.apiKey;
+            headers['x-Authorization'] = authCredentials.secrets.stsToken;
+        } else {
+            throw new Error(`Unsupported login method for fetchWithAuth: ${authCredentials.loginMethod}`);
+        }
+
+        options.headers = headers;
         let response = await fetch(input, options);
         console.log("Response status: ", response.status);
 
-        // Handle token expiration
-        if (response.status === 401) {
+        // Handle token expiration (only for BI_INTEL flow)
+        if (response.status === 401 && authCredentials.loginMethod === LoginMethod.BI_INTEL) {
             console.log("Token expired. Refreshing token...");
             const newToken = await getRefreshedAccessToken();
             if (newToken) {
-                options.headers = {
-                    ...options.headers,
-                    'Authorization': `Bearer ${newToken}`,
-                };
+                headers['Authorization'] = `Bearer ${newToken}`;
+                options.headers = headers;
                 response = await fetch(input, options);
             } else {
                 AIStateMachine.service().send(AIMachineEventType.LOGOUT);
@@ -87,17 +96,20 @@ export const getAnthropicClient = async (model: AnthropicModel) => {
 
     // Recreate client if login method has changed or no cached instance
     if (!cachedAnthropic || cachedAuthMethod !== loginMethod) {
-        if (loginMethod === LoginMethod.BI_INTEL) {
+        if (loginMethod === LoginMethod.BI_INTEL || loginMethod === LoginMethod.DEVANT_ENV) {
             cachedAnthropic = createAnthropic({
                 baseURL: BACKEND_URL + "/intelligence-api/v1.0/claude",
                 apiKey: "xx", // dummy value; real auth is via fetchWithAuth
                 fetch: fetchWithAuth,
             });
         } else if (loginMethod === LoginMethod.ANTHROPIC_KEY) {
-            const apiKey = await getAccessToken();
+            const authCredentials = await getAuthCredentials();
+            if (authCredentials.loginMethod !== LoginMethod.ANTHROPIC_KEY) {
+                throw new Error("Invalid login method for Anthropic client");
+            }
             cachedAnthropic = createAnthropic({
                 baseURL: "https://api.anthropic.com/v1",
-                apiKey: apiKey,
+                apiKey: authCredentials.secrets.apiKey,
             });
         } else {
             throw new Error(`Unsupported login method: ${loginMethod}`);

@@ -16,18 +16,19 @@
  * under the License.
  */
 
-import { getAccessToken, getRefreshedAccessToken } from "../../../utils/ai/auth";
+import { LoginMethod } from "@wso2/ballerina-core";
+import { getAuthCredentials, getRefreshedAccessToken } from "../../../utils/ai/auth";
 
 export async function fetchData(url: string, options: RequestInit): Promise<Response> {
     try {
-        const token = await getAccessToken();
-        if (!token) {
+        const authCredentials = await getAuthCredentials();
+        if (!authCredentials || authCredentials.loginMethod !== LoginMethod.BI_INTEL) {
             throw new Error("Authentication failed. Please log in again.");
         }
 
         options.headers = {
             ...options.headers,
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${authCredentials.secrets.accessToken}`,
         };
 
         let response = await fetch(url, options);

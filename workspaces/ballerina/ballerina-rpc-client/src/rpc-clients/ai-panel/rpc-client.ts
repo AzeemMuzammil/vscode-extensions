@@ -23,6 +23,7 @@ import {
     AIPanelAPI,
     AIPanelPrompt,
     AddToProjectRequest,
+    AuthCredentials,
     DeleteFromProjectRequest,
     DeveloperDocument,
     FetchDataRequest,
@@ -72,6 +73,7 @@ import {
     getAIMachineSnapshot,
     getAccessToken,
     getActiveFile,
+    getAuthCredentials,
     getBackendUrl,
     getContentFromFile,
     getDefaultPrompt,
@@ -125,6 +127,10 @@ export class AiPanelRpcClient implements AIPanelAPI {
 
     getProjectUuid(): Promise<string> {
         return this._messenger.sendRequest(getProjectUuid, HOST_EXTENSION);
+    }
+
+    getAuthCredentials(): Promise<AuthCredentials> {
+        return this._messenger.sendRequest(getAuthCredentials, HOST_EXTENSION);
     }
 
     getAccessToken(): Promise<string> {

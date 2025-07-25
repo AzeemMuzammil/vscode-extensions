@@ -20,7 +20,7 @@ import axios from 'axios';
 import { AUTH_CLIENT_ID, AUTH_ORG, AUTH_REDIRECT_URL } from '../../features/ai/utils';
 import { AIStateMachine } from './aiMachine';
 import { AIMachineEventType, AuthCredentials, LoginMethod } from '@wso2/ballerina-core';
-import { storeAuthCredentials } from '../../utils/ai/auth';
+import { storeAuthCredentialsInSecrets } from '../../utils/ai/auth-secrets';
 
 export interface AccessToken {
     accessToken: string;
@@ -82,7 +82,7 @@ export async function exchangeAuthCode(authCode: string) {
                     refreshToken: response.refreshToken ?? ''
                 }
             };
-            await storeAuthCredentials(credentials);
+            await storeAuthCredentialsInSecrets(credentials);
 
             AIStateMachine.sendEvent(AIMachineEventType.COMPLETE_AUTH);
         } catch (error: any) {

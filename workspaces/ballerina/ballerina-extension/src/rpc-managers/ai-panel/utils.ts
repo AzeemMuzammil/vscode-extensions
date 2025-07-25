@@ -17,7 +17,7 @@
  */
 
 import { ArrayTypeDesc, FunctionDefinition, ModulePart, QualifiedNameReference, RequiredParam, STKindChecker } from "@wso2/syntax-tree";
-import { ErrorCode, FormField, STModification, SyntaxTree, Attachment, AttachmentStatus, RecordDefinitonObject, ParameterMetadata, ParameterDefinitions, MappingFileRecord, keywords, AIMachineEventType, DiagnosticEntry } from "@wso2/ballerina-core";
+import { ErrorCode, FormField, STModification, SyntaxTree, Attachment, AttachmentStatus, RecordDefinitonObject, ParameterMetadata, ParameterDefinitions, MappingFileRecord, keywords, AIMachineEventType, DiagnosticEntry, LoginMethod } from "@wso2/ballerina-core";
 import { QuickPickItem, QuickPickOptions, window, workspace } from 'vscode';
 import { UNKNOWN_ERROR } from '../../views/ai-panel/errorCodes';
 
@@ -37,7 +37,7 @@ import {
 // import { StateMachineAI } from "../../views/ai-panel/aiMachine";
 import path from "path";
 import * as fs from 'fs';
-import { getAccessToken, getRefreshedAccessToken } from "../../../src/utils/ai/auth";
+import { getAuthCredentials, getRefreshedAccessToken } from "../../../src/utils/ai/auth";
 import { AIStateMachine } from "../../../src/views/ai-panel/aiMachine";
 import { AIChatError } from "./utils/errors";
 import { generateAutoMappings } from "../../../src/features/ai/service/datamapper/datamapper";
@@ -1296,11 +1296,27 @@ export function getBalRecFieldName(fieldName: string) {
 export async function getDatamapperCode(parameterDefinitions: ErrorCode | ParameterMetadata): Promise<object | ErrorCode> {
     let nestedKeyArray: string[] = [];
     try {
-        const accessToken = await getAccessToken().catch((error) => {
+        const authCredentials = await getAuthCredentials().catch((error) => {
             console.error(error);
             return NOT_LOGGED_IN;
         });
-        let response: DatamapperResponse = await sendDatamapperRequest(parameterDefinitions, accessToken);
+        let tokenOrError: string | ErrorCode;
+        if ("code" in authCredentials) {
+            tokenOrError = authCredentials;
+        } else {
+            // Now TypeScript knows it's AuthCredentials
+            switch (authCredentials.loginMethod) {
+                case LoginMethod.BI_INTEL:
+                    tokenOrError = authCredentials.secrets.accessToken;
+                    break;
+                case LoginMethod.ANTHROPIC_KEY:
+                    tokenOrError = authCredentials.secrets.apiKey;
+                    break;
+                default:
+                    tokenOrError = { code: 400, message: "UNSUPPORTED_LOGIN_METHOD" };
+            }
+        }
+        let response: DatamapperResponse = await sendDatamapperRequest(parameterDefinitions, tokenOrError);
 
         let intermediateMapping = response.mappings;
         let finalCode = await generateBallerinaCode(intermediateMapping, parameterDefinitions, "", nestedKeyArray);
