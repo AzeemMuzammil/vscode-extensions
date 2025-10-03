@@ -42,7 +42,6 @@ import { ResourceAccordionV2 } from "./components/ResourceAccordionV2";
 import { FunctionConfigForm } from "./Forms/FunctionConfigForm";
 import { FunctionForm } from "./Forms/FunctionForm";
 import { ResourceForm } from "./Forms/ResourceForm";
-import { getCustomEntryNodeIcon } from "../ComponentListView/EventIntegrationPanel";
 
 const LoadingContainer = styled.div`
     display: flex;
@@ -617,6 +616,20 @@ export function ServiceDesigner(props: ServiceDesignerProps) {
             return nameMatch || iconMatch;
         })
         .length;
+
+    function createLineRange(filePath: string, position: NodePosition): LineRange {
+        return {
+            fileName: filePath,
+            startLine: {
+                line: position.startLine ?? 1,
+                offset: position.startColumn ?? 0
+            },
+            endLine: {
+                line: position.endLine ?? position.startLine ?? 1,
+                offset: position.endColumn ?? position.startColumn ?? 0
+            }
+        };
+    }
 
     return (
         <View>
